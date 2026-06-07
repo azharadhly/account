@@ -1,0 +1,19 @@
+{
+  "app": "CashFlow Ledger",
+  "version": 1,
+  "exportedAt": "2026-06-07T13:16:44.604Z",
+  "accounts": [
+    {
+      "id": "v-1780838171465-90683",
+      "nickname": "test",
+      "incoming": [
+        {
+          "id": "i-1780838178319-46646",
+          "amount": 44,
+          "reason": "dd"
+        }
+      ],
+      "outgoing": []
+    }
+  ]
+}

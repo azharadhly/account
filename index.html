@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CashFlow Ledger — Offline Virtual Accounts</title>
+
+  <!--
+    OFFLINE-FIRST STANDALONE APP
+    ----------------------------
+    - No bank APIs, no cloud, no live network calls for data.
+    - All state lives in the browser (localStorage) + import/export to a
+      local file on disk (JSON or CSV).
+    - Tailwind is loaded via CDN ONLY for styling. The first run benefits
+      from internet to fetch Tailwind/fonts; after that the browser cache
+      keeps it working. To make styling 100% offline forever, download
+      tailwind once and reference it locally (see note at the bottom of file).
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script>
+    // Tailwind configuration (kept inline so the file is self-contained)
+    if (window.tailwind) {
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+            }
+          }
+        }
+      };
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    /* Thin custom scrollbar inside the ledger columns */
+    .ledger-scroll::-webkit-scrollbar { width: 6px; }
+    .ledger-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .ledger-scroll::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- ============================ -->
+  <!-- GLOBAL NAVIGATION + STORAGE BAR -->
+  <!-- ============================ -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3 sm:h-16 sm:py-0">
+
+        <!-- Logo and App Name -->
+        <div class="flex items-center justify-between sm:justify-start space-x-3">
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 text-white shadow-md">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+              </svg>
+            </div>
+            <div class="leading-tight">
+              <span class="block text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">CashFlow Ledger</span>
+              <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Offline · Local File Storage</span>
+            </div>
+          </div>
+
+          <!-- Offline status pill (mobile shows next to logo) -->
+          <div class="flex sm:hidden items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-medium text-slate-600">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Offline</span>
+          </div>
+        </div>
+
+        <!-- STORAGE ACTIONS: Import / Export -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="hidden lg:flex items-center space-x-2 bg-emerald-50 px-3 py-1.5 rounded-full text-xs font-semibold text-emerald-700 border border-emerald-100">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>100% Offline</span>
+          </div>
+
+          <!-- Linked file indicator (shown once a file is linked via File System Access API) -->
+          <span id="linked-file-pill" class="hidden items-center gap-1.5 max-w-[180px] bg-slate-100 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 border border-slate-200" title="">
+            <svg class="w-3.5 h-3.5 text-cyan-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.656-1.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"></path>
+            </svg>
+            <span id="linked-file-name" class="truncate"></span>
+          </span>
+
+          <!-- Hidden native file input (fallback for browsers without File System Access API) -->
+          <input type="file" id="import-file-input" accept=".json,.csv,application/json,text/csv" class="hidden" onchange="handleFileImport(event)">
+
+          <!-- Open / Import Ledger File -->
+          <button onclick="openLedgerFile()"
+            class="inline-flex items-center px-3.5 py-2 bg-white border border-slate-200 hover:border-cyan-400 hover:text-cyan-600 text-slate-600 text-xs font-bold rounded-xl shadow-sm transition-all">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+            Import Ledger File
+          </button>
+
+          <!-- Split button: primary Save + dropdown caret -->
+          <div class="relative flex">
+            <button onclick="saveLedger()"
+              class="inline-flex items-center px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-700 hover:to-cyan-600 text-white text-xs font-bold rounded-l-xl shadow-sm transition-all">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+              </svg>
+              <span id="save-btn-label">Export / Save Changes</span>
+            </button>
+            <button onclick="toggleExportMenu(event)" title="More save options"
+              class="inline-flex items-center px-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-r-xl shadow-sm transition-all border-l border-cyan-400/40">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div id="export-menu" class="hidden absolute right-0 mt-2 top-full w-60 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-40">
+              <button onclick="saveAs('json')" class="w-full text-left px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors">
+                <span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-[10px]">{ }</span>
+                Save As… (JSON) <span class="text-[10px] text-slate-400 font-normal">full fidelity</span>
+              </button>
+              <button onclick="saveAs('csv')" class="w-full text-left px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100 transition-colors">
+                <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-[10px]">CSV</span>
+                Save As… (CSV / Excel)
+              </button>
+              <button onclick="exportData('json')" class="w-full text-left px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100 transition-colors">
+                <svg class="w-7 h-7 p-1.5 rounded-lg bg-slate-100 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download a copy (JSON)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ============================ -->
+  <!-- MAIN CONTAINER -->
+  <!-- ============================ -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Section heading + create button -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div class="space-y-1">
+        <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <svg class="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          Virtual Ledger Accounts
+        </h2>
+        <p class="text-xs text-slate-500">Track <span class="font-semibold text-emerald-600">Incoming</span> and <span class="font-semibold text-rose-600">Outgoing</span> entries with reasons — saved to your own local file.</p>
+      </div>
+      <button onclick="openCreateEnvelopeModal()" class="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-700 hover:to-cyan-600 text-white text-xs font-bold rounded-xl shadow-sm transition-all transform hover:-translate-y-0.5">
+        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+        </svg>
+        New Ledger Account
+      </button>
+    </div>
+
+    <!-- GRAND TOTALS BAR (across all accounts) -->
+    <div id="grand-totals" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"></div>
+
+    <!-- Ledger Cards Grid -->
+    <div id="virtual-ledger-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Dynamic content rendered by JavaScript -->
+    </div>
+  </main>
+
+  <!-- ============================ -->
+  <!-- MODAL: ADD TRANSACTION (INCOMING / OUTGOING) -->
+  <!-- ============================ -->
+  <div id="transaction-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 transform scale-95 transition-transform duration-200" id="transaction-modal-content">
+      <div id="modal-banner" class="px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r">
+        <div>
+          <h3 id="modal-title" class="text-lg font-extrabold tracking-tight">Add Transaction</h3>
+          <p id="modal-subtitle" class="text-xs opacity-90 font-medium">Ledger Account</p>
+        </div>
+        <button onclick="closeTransactionModal()" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="transaction-form" onsubmit="handleTransactionSubmit(event)" class="p-6 space-y-4">
+        <input type="hidden" id="modal-env-id" value="">
+        <input type="hidden" id="modal-trans-type" value="">
+
+        <div class="space-y-1.5">
+          <label for="modal-amount" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</label>
+          <div class="relative">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">$</span>
+            <input type="number" step="0.01" min="0.01" id="modal-amount" required placeholder="0.00"
+              class="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-semibold text-slate-800 transition">
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label id="reason-label" for="modal-reason" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Reason</label>
+          <input type="text" id="modal-reason" required placeholder="e.g. bike repair, petrol, splitting cost"
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-700 transition">
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeTransactionModal()"
+            class="flex-1 px-4 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition">Cancel</button>
+          <button type="submit" id="modal-submit-btn"
+            class="flex-1 px-4 py-3 text-sm font-bold text-white rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">Save Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================ -->
+  <!-- MODAL: CREATE NEW LEDGER ACCOUNT -->
+  <!-- ============================ -->
+  <div id="envelope-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 transform scale-95 transition-transform duration-200" id="envelope-modal-content">
+      <div class="bg-gradient-to-r from-cyan-500 to-cyan-600 px-6 py-5 text-white flex justify-between items-center">
+        <div>
+          <h3 class="text-lg font-extrabold tracking-tight">Create Ledger Account</h3>
+          <p class="text-xs opacity-90 font-medium">Add a virtual account to track split costs</p>
+        </div>
+        <button onclick="closeEnvelopeModal()" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="envelope-form" onsubmit="handleEnvelopeSubmit(event)" class="p-6 space-y-4">
+        <div class="space-y-1.5">
+          <label for="envelope-nickname" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Account Nickname</label>
+          <input type="text" id="envelope-nickname" required placeholder="e.g. Sachi Acc, Abi Acc, Home Ledger"
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-700 transition">
+        </div>
+
+        <div class="bg-cyan-50 border border-cyan-100 rounded-xl p-4">
+          <p class="text-xs text-cyan-800 leading-relaxed">
+            New accounts start with a <strong>$0.00</strong> net balance. Add funding with the green incoming button (<strong>+</strong>) or record expenses with the red outgoing button (<strong>−</strong>).
+          </p>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeEnvelopeModal()"
+            class="flex-1 px-4 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition">Cancel</button>
+          <button type="submit"
+            class="flex-1 px-4 py-3 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl shadow-md transition-all">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer Info -->
+  <footer class="bg-white border-t border-slate-200 mt-16 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-6xl mx-auto px-4">
+      <p>&copy; 2026 CashFlow Ledger · Runs entirely offline · Your data never leaves this device.</p>
+    </div>
+  </footer>
+
+  <!-- ============================ -->
+  <!-- JAVASCRIPT STATE & LOGIC -->
+  <!-- ============================ -->
+  <script>
+    "use strict";
+
+    const STORAGE_KEY = 'cashflow.ledger.v1';
+
+    let virtualAccounts = [];
+
+    // ---------- Helpers ----------
+    const money = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const uid = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
+    const escapeHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+
+    // ---------- Local persistence (browser localStorage) ----------
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(virtualAccounts));
+      } catch (e) {
+        console.warn('Could not persist to localStorage:', e);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {
+        console.warn('Could not read localStorage:', e);
+      }
+      return []; // start with no accounts
+    }
+
+    // ---------- Rendering ----------
+    function renderGrandTotals() {
+      const wrap = document.getElementById('grand-totals');
+      let inc = 0, out = 0;
+      virtualAccounts.forEach(a => {
+        inc += a.incoming.reduce((s, i) => s + Number(i.amount || 0), 0);
+        out += a.outgoing.reduce((s, o) => s + Number(o.amount || 0), 0);
+      });
+      const net = inc - out;
+      const netColor = net >= 0 ? 'text-blue-700' : 'text-rose-700';
+
+      wrap.innerHTML = `
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Incoming · All Accounts</span>
+          <span class="text-2xl font-extrabold text-emerald-600">$${money(inc)}</span>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Outgoing · All Accounts</span>
+          <span class="text-2xl font-extrabold text-rose-600">$${money(out)}</span>
+        </div>
+        <div class="bg-blue-50 rounded-2xl border border-blue-100 shadow-sm px-5 py-4">
+          <span class="block text-[10px] uppercase text-blue-400 font-bold tracking-wider">Combined Net Balance</span>
+          <span class="text-2xl font-black ${netColor}">$${money(net)}</span>
+        </div>
+      `;
+    }
+
+  function renderVirtualLedgers() {
+      const grid = document.getElementById('virtual-ledger-grid');
+      grid.innerHTML = '';
+
+      if (virtualAccounts.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-1 lg:col-span-2 bg-white rounded-3xl p-10 text-center border-2 border-dashed border-slate-200">
+            <p class="text-slate-500 font-medium">No ledger accounts yet.</p>
+            <p class="text-xs text-slate-400 mt-1">Create a new account above, or import a saved ledger file to begin.</p>
+          </div>`;
+        renderGrandTotals();
+        return;
+      }
+
+      virtualAccounts.forEach(env => {
+        const totalIncoming = env.incoming.reduce((s, i) => s + Number(i.amount || 0), 0);
+        const totalOutgoing = env.outgoing.reduce((s, o) => s + Number(o.amount || 0), 0);
+        const netBalance = totalIncoming - totalOutgoing;
+        const netColor = netBalance >= 0 ? 'text-blue-700' : 'text-rose-700';
+
+        const incomingRows = env.incoming.map(inc => `
+          <li class="flex items-start justify-between text-xs py-1 hover:bg-emerald-50 rounded px-1 transition group relative">
+            <div class="space-y-0.5 pr-4">
+              <p class="font-bold text-slate-800 flex items-center gap-1">
+                <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                $${money(inc.amount)}
+              </p>
+              <p class="text-[10px] text-slate-400 break-words max-w-[110px]" title="${escapeHtml(inc.reason)}">${escapeHtml(inc.reason)}</p>
+            </div>
+            <button onclick="removeTransaction('${env.id}','incoming','${inc.id}')" class="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute right-0 top-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </li>`).join('');
+
+        const outgoingRows = env.outgoing.map(out => `
+          <li class="flex items-start justify-between text-xs py-1 hover:bg-rose-50 rounded px-1 transition group relative">
+            <div class="space-y-0.5 pr-4">
+              <p class="font-bold text-slate-800 flex items-center gap-1">
+                <svg class="w-3 h-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                $${money(out.amount)}
+              </p>
+              <p class="text-[10px] text-slate-500 break-words max-w-[110px]" title="${escapeHtml(out.reason)}">${escapeHtml(out.reason)}</p>
+            </div>
+            <button onclick="removeTransaction('${env.id}','outgoing','${out.id}')" class="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute right-0 top-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </li>`).join('');
+
+        const cardHTML = `
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-all duration-300">
+            <!-- Cyan accent banner with nickname -->
+            <div class="bg-gradient-to-r from-cyan-400 to-cyan-500 px-6 py-4 flex items-center justify-between shadow-sm">
+              <div class="flex items-center space-x-2">
+                <span class="p-1 bg-white/20 rounded-lg text-white">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </span>
+                <h3 class="font-bold text-white text-base tracking-tight">${escapeHtml(env.nickname)}</h3>
+              </div>
+              <button onclick="deleteEnvelope('${env.id}')" class="text-cyan-100 hover:text-white p-1 rounded-lg transition" title="Delete this ledger account">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+
+            <!-- Split columns: left=Incoming (green tint), right=Outgoing (red tint) -->
+            <div class="grid grid-cols-2 border-b border-slate-100 min-h-[180px] max-h-[260px] overflow-y-auto ledger-scroll">
+              <div class="bg-emerald-50/40 p-4 border-r border-slate-100">
+                <h4 class="text-[10px] font-extrabold text-emerald-800 tracking-wider uppercase mb-3 flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Incoming
+                </h4>
+                <ul class="space-y-2">
+                  ${incomingRows}
+                  ${env.incoming.length === 0 ? '<li class="text-[10px] text-slate-400 italic text-center py-4">No allocations</li>' : ''}
+                </ul>
+              </div>
+              <div class="bg-rose-50/40 p-4">
+                <h4 class="text-[10px] font-extrabold text-rose-800 tracking-wider uppercase mb-3 flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full bg-rose-400"></span> Outgoing & Reasons
+                </h4>
+                <ul class="space-y-2">
+                  ${outgoingRows}
+                  ${env.outgoing.length === 0 ? '<li class="text-[10px] text-slate-400 italic text-center py-4">No expenses</li>' : ''}
+                </ul>
+              </div>
+            </div>
+
+            <!-- Floating + / - action buttons -->
+            <div class="flex justify-center -mt-4 mb-2 z-10 relative">
+              <div class="flex items-center gap-2.5 bg-white p-1 rounded-full shadow-md border border-slate-100">
+                <button onclick="openTransactionModal('${env.id}','incoming')" class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition shadow-sm" title="Add Incoming">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+                <span class="h-4 w-px bg-slate-200"></span>
+                <button onclick="openTransactionModal('${env.id}','outgoing')" class="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 transition shadow-sm" title="Add Outgoing / Expense">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Calculation footer -->
+            <div class="bg-slate-50 px-5 py-4 border-t border-slate-100 rounded-b-3xl">
+              <div class="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500 mb-2">
+                <div>
+                  <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Incoming</span>
+                  <span class="text-emerald-700 font-bold text-sm">$${money(totalIncoming)}</span>
+                </div>
+                <div class="text-right">
+                  <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Outgoing</span>
+                  <span class="text-rose-700 font-bold text-sm">$${money(totalOutgoing)}</span>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between">
+                <span class="text-[10px] uppercase text-slate-500 font-extrabold tracking-wider">Net Balance</span>
+                <div class="bg-blue-50 border border-blue-100 px-3 py-1 rounded-xl">
+                  <span class="text-sm font-black ${netColor}">$${money(netBalance)}</span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        grid.insertAdjacentHTML('beforeend', cardHTML);
+      });
+
+      renderGrandTotals();
+    }
+
+    // Re-render + persist in one shot
+    function commit() {
+      saveState();
+      renderVirtualLedgers();
+    }
+
+    // ---------- Transaction modal ----------
+    function openTransactionModal(envelopeId, type) {
+      const env = virtualAccounts.find(v => v.id === envelopeId);
+      if (!env) return;
+
+      document.getElementById('modal-env-id').value = envelopeId;
+      document.getElementById('modal-trans-type').value = type;
+      document.getElementById('modal-subtitle').innerText = `${env.nickname} Account`;
+      document.getElementById('modal-amount').value = '';
+      document.getElementById('modal-reason').value = '';
+
+      const banner = document.getElementById('modal-banner');
+      const submitBtn = document.getElementById('modal-submit-btn');
+      const reasonLabel = document.getElementById('reason-label');
+      const title = document.getElementById('modal-title');
+
+      if (type === 'incoming') {
+        title.innerText = 'Add Incoming Funds';
+        reasonLabel.innerText = 'Source / Reason';
+        banner.className = "px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r from-emerald-500 to-teal-500";
+        submitBtn.className = "flex-1 px-4 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all";
+      } else {
+        title.innerText = 'Add Outgoing Expense';
+        reasonLabel.innerText = 'Expenditure / Reason';
+        banner.className = "px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r from-rose-500 to-pink-500";
+        submitBtn.className = "flex-1 px-4 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition-all";
+      }
+
+      showModal('transaction-modal', 'transaction-modal-content');
+      setTimeout(() => document.getElementById('modal-amount').focus(), 250);
+    }
+    function closeTransactionModal() { hideModal('transaction-modal', 'transaction-modal-content'); }
+
+    function handleTransactionSubmit(event) {
+      event.preventDefault();
+      const envId = document.getElementById('modal-env-id').value;
+      const type = document.getElementById('modal-trans-type').value;
+      const amount = parseFloat(document.getElementById('modal-amount').value);
+      const reason = document.getElementById('modal-reason').value.trim();
+
+      if (isNaN(amount) || amount <= 0 || !reason) {
+        showToast('Please enter a valid amount and reason', 'error');
+        return;
+      }
+
+      const env = virtualAccounts.find(v => v.id === envId);
+      if (!env) return;
+
+      const item = { id: uid(type[0]), amount: Math.round(amount * 100) / 100, reason };
+      if (type === 'incoming') {
+        env.incoming.push(item);
+        showToast(`Added +$${money(amount)} to ${env.nickname}`, 'success');
+      } else {
+        env.outgoing.push(item);
+        showToast(`Recorded −$${money(amount)} on ${env.nickname}`, 'info');
+      }
+      commit();
+      closeTransactionModal();
+    }
+
+    // ---------- Create / delete account ----------
+    function openCreateEnvelopeModal() {
+      document.getElementById('envelope-nickname').value = '';
+      showModal('envelope-modal', 'envelope-modal-content');
+      setTimeout(() => document.getElementById('envelope-nickname').focus(), 250);
+    }
+    function closeEnvelopeModal() { hideModal('envelope-modal', 'envelope-modal-content'); }
+
+    function handleEnvelopeSubmit(event) {
+      event.preventDefault();
+      const nickname = document.getElementById('envelope-nickname').value.trim();
+      if (!nickname) { showToast('Nickname cannot be empty', 'error'); return; }
+
+      virtualAccounts.push({ id: uid('v'), nickname, incoming: [], outgoing: [] });
+      commit();
+      closeEnvelopeModal();
+      showToast(`Created "${nickname}" account`, 'success');
+    }
+
+    function deleteEnvelope(envId) {
+      const env = virtualAccounts.find(v => v.id === envId);
+      if (!env) return;
+      if (confirm(`Permanently delete the ledger account "${env.nickname}"? All its entries will be lost.`)) {
+        virtualAccounts = virtualAccounts.filter(v => v.id !== envId);
+        commit();
+        showToast('Account deleted', 'info');
+      }
+    }
+
+    function removeTransaction(envId, type, transId) {
+      const env = virtualAccounts.find(v => v.id === envId);
+      if (!env) return;
+      env[type] = env[type].filter(t => t.id !== transId);
+      commit();
+      showToast('Entry removed', 'info');
+    }
+
+    // ---------- Generic modal show/hide ----------
+    function showModal(modalId, contentId) {
+      const modal = document.getElementById(modalId);
+      const content = document.getElementById(contentId);
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+      });
+    }
+    function hideModal(modalId, contentId) {
+      const modal = document.getElementById(modalId);
+      const content = document.getElementById(contentId);
+      modal.classList.add('opacity-0');
+      content.classList.add('scale-95');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    // ============================================
+    // STORAGE LAYER — IMPORT / EXPORT LOCAL FILES
+    // ============================================
+
+    // Live handle to the on-disk file the user opened/saved (File System Access API).
+    // When set, "Save" writes straight back to that file with no re-download.
+    let fileHandle = null;
+    const supportsFSAccess = ('showOpenFilePicker' in window) && ('showSaveFilePicker' in window);
+
+    function toggleExportMenu(event) {
+      event.stopPropagation();
+      document.getElementById('export-menu').classList.toggle('hidden');
+    }
+    document.addEventListener('click', () => {
+      document.getElementById('export-menu').classList.add('hidden');
+    });
+
+    function setLinkedFile(handle) {
+      fileHandle = handle;
+      const pill = document.getElementById('linked-file-pill');
+      const nameEl = document.getElementById('linked-file-name');
+      const saveLabel = document.getElementById('save-btn-label');
+      if (handle) {
+        pill.classList.remove('hidden');
+        pill.classList.add('flex');
+        pill.title = `Linked file: ${handle.name}`;
+        nameEl.textContent = handle.name;
+        saveLabel.textContent = 'Save Changes';
+      } else {
+        pill.classList.add('hidden');
+        pill.classList.remove('flex');
+        saveLabel.textContent = 'Export / Save Changes';
+      }
+    }
+
+    // ----- Build file contents in either format -----
+    function buildJson() {
+      return JSON.stringify({
+        app: 'CashFlow Ledger',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        accounts: virtualAccounts
+      }, null, 2);
+    }
+
+    // Decide format from a filename
+    function formatForName(name) {
+      return /\.csv$/i.test(name) ? 'csv' : 'json';
+    }
+
+    // ----- DOWNLOAD fallback -----
+    function triggerDownload(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function dateStamp() {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+
+    // Plain download (always available; used as the fallback "Save As").
+    function exportData(format) {
+      document.getElementById('export-menu').classList.add('hidden');
+      if (virtualAccounts.length === 0) { showToast('Nothing to export yet', 'error'); return; }
+
+      if (format === 'json') {
+        triggerDownload(`cashflow-ledger-${dateStamp()}.json`, buildJson(), 'application/json');
+        showToast('Downloaded a JSON copy', 'success');
+      } else {
+        triggerDownload(`cashflow-ledger-${dateStamp()}.csv`, buildCsv(), 'text/csv;charset=utf-8;');
+        showToast('Downloaded a CSV copy', 'success');
+      }
+    }
+
+    // Write the current data straight into an open file handle.
+    async function writeToHandle(handle) {
+      const format = formatForName(handle.name);
+      const contents = format === 'csv' ? buildCsv() : buildJson();
+      const writable = await handle.createWritable();
+      await writable.write(contents);
+      await writable.close();
+    }
+
+    // PRIMARY "Save" button:
+    //  - If a file is already linked → overwrite it in place.
+    //  - Else, if the browser supports it → ask once where to save, then link it.
+    //  - Else → fall back to a plain download.
+    async function saveLedger() {
+      if (virtualAccounts.length === 0) { showToast('Nothing to save yet', 'error'); return; }
+
+      if (fileHandle) {
+        try {
+          await writeToHandle(fileHandle);
+          showToast(`Saved to ${fileHandle.name}`, 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Could not write to the linked file', 'error');
+        }
+        return;
+      }
+      // No linked file yet → behave like "Save As (JSON)".
+      await saveAs('json');
+    }
+
+    // "Save As…" — pick/create a file on disk, then keep it linked for future saves.
+    async function saveAs(format) {
+      document.getElementById('export-menu').classList.add('hidden');
+      if (virtualAccounts.length === 0) { showToast('Nothing to save yet', 'error'); return; }
+
+      if (!supportsFSAccess) {
+        // Firefox / Safari → fall back to a normal download.
+        exportData(format);
+        return;
+      }
+
+      const isCsv = format === 'csv';
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: `cashflow-ledger-${dateStamp()}.${isCsv ? 'csv' : 'json'}`,
+          types: [{
+            description: isCsv ? 'CSV / Excel' : 'JSON ledger',
+            accept: isCsv ? { 'text/csv': ['.csv'] } : { 'application/json': ['.json'] }
+          }]
+        });
+        await writeToHandle(handle);
+        setLinkedFile(handle);
+        showToast(`Saved to ${handle.name} — future saves overwrite it`, 'success');
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // user cancelled the dialog
+        // Some setups block the picker on file:// (opaque origin) → download instead.
+        if (err && (err.name === 'SecurityError' || err.name === 'NotAllowedError')) {
+          showToast('In-place save unavailable here — downloading a copy instead', 'info');
+          exportData(format);
+          return;
+        }
+        console.error(err);
+        showToast('Save was cancelled or failed', 'error');
+      }
+    }
+
+    function csvField(value) {
+      const s = String(value ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+
+    function buildCsv() {
+      const rows = [['Account', 'Type', 'Amount', 'Reason']];
+      virtualAccounts.forEach(env => {
+        env.incoming.forEach(i => rows.push([env.nickname, 'Incoming', Number(i.amount).toFixed(2), i.reason]));
+        env.outgoing.forEach(o => rows.push([env.nickname, 'Outgoing', Number(o.amount).toFixed(2), o.reason]));
+        // Keep empty accounts in the file so they survive a round-trip
+        if (env.incoming.length === 0 && env.outgoing.length === 0) {
+          rows.push([env.nickname, '', '', '']);
+        }
+      });
+      return rows.map(r => r.map(csvField).join(',')).join('\r\n');
+    }
+
+    // ----- IMPORT / OPEN -----
+
+    // Shared loader: parse text by filename/content and replace the working set.
+    function loadFromText(text, filename) {
+      const isCsv = /\.csv$/i.test(filename) || (!text.trim().startsWith('{') && !text.trim().startsWith('['));
+      const accounts = isCsv ? parseCsv(text) : parseJson(text);
+      if (!accounts || accounts.length === 0) {
+        showToast('No ledger data found in that file', 'error');
+        return false;
+      }
+      virtualAccounts = accounts;
+      commit();
+      showToast(`Imported ${accounts.length} account(s) from ${filename}`, 'success');
+      return true;
+    }
+
+    // Open button: use the File System Access picker when available (keeps the
+    // file linked so later "Save" overwrites it), otherwise the native input.
+    async function openLedgerFile() {
+      if (!supportsFSAccess) {
+        document.getElementById('import-file-input').click();
+        return;
+      }
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{
+            description: 'Ledger file (JSON or CSV)',
+            accept: { 'application/json': ['.json'], 'text/csv': ['.csv'] }
+          }],
+          multiple: false
+        });
+        const file = await handle.getFile();
+        const text = await file.text();
+        if (loadFromText(text, file.name)) {
+          setLinkedFile(handle); // link it so Save overwrites this exact file
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // user cancelled
+        // Picker blocked on file:// → fall back to the native input.
+        if (err && (err.name === 'SecurityError' || err.name === 'NotAllowedError')) {
+          document.getElementById('import-file-input').click();
+          return;
+        }
+        console.error(err);
+        showToast('Could not open that file', 'error');
+      }
+    }
+
+    // Fallback input handler (browsers without the File System Access API).
+    function handleFileImport(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          loadFromText(String(e.target.result), file.name);
+        } catch (err) {
+          console.error(err);
+          showToast('Could not read that file — invalid format', 'error');
+        } finally {
+          event.target.value = ''; // allow re-importing the same file
+        }
+      };
+      reader.onerror = () => showToast('Failed to read the file', 'error');
+      reader.readAsText(file);
+    }
+
+    function normalizeAccount(raw, idx) {
+      const mapEntries = (arr, p) => (Array.isArray(arr) ? arr : []).map((t) => ({
+        id: t.id || uid(p),
+        amount: Math.round(Number(t.amount || 0) * 100) / 100,
+        reason: String(t.reason ?? '')
+      }));
+      return {
+        id: raw.id || uid('v'),
+        nickname: String(raw.nickname || `Account ${idx + 1}`),
+        incoming: mapEntries(raw.incoming, 'i'),
+        outgoing: mapEntries(raw.outgoing, 'o')
+      };
+    }
+
+    function parseJson(text) {
+      const data = JSON.parse(text);
+      const list = Array.isArray(data) ? data : (Array.isArray(data.accounts) ? data.accounts : null);
+      if (!list) throw new Error('Unrecognized JSON shape');
+      return list.map(normalizeAccount);
+    }
+
+    // Minimal RFC-4180-ish CSV parser (handles quotes, commas, newlines in fields)
+    function parseCsvRows(text) {
+      const rows = [];
+      let row = [], field = '', inQuotes = false;
+      const s = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (s[i + 1] === '"') { field += '"'; i++; }
+            else inQuotes = false;
+          } else field += c;
+        } else {
+          if (c === '"') inQuotes = true;
+          else if (c === ',') { row.push(field); field = ''; }
+          else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+          else field += c;
+        }
+      }
+      if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+      return rows.filter(r => r.length && !(r.length === 1 && r[0].trim() === ''));
+    }
+
+    function parseCsv(text) {
+      const rows = parseCsvRows(text);
+      if (rows.length === 0) return [];
+
+      // Detect & skip header row if present
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      let start = 0, col = { account: 0, type: 1, amount: 2, reason: 3 };
+      if (header.includes('account') || header.includes('type') || header.includes('amount')) {
+        start = 1;
+        col = {
+          account: header.indexOf('account') !== -1 ? header.indexOf('account') : 0,
+          type:    header.indexOf('type')    !== -1 ? header.indexOf('type')    : 1,
+          amount:  header.indexOf('amount')  !== -1 ? header.indexOf('amount')  : 2,
+          reason:  header.indexOf('reason')  !== -1 ? header.indexOf('reason')  : 3
+        };
+      }
+
+      const byName = new Map();
+      const getAcc = (name) => {
+        const key = name || 'Imported Account';
+        if (!byName.has(key)) byName.set(key, { id: uid('v'), nickname: key, incoming: [], outgoing: [] });
+        return byName.get(key);
+      };
+
+      for (let r = start; r < rows.length; r++) {
+        const cells = rows[r];
+        const name = (cells[col.account] || '').trim();
+        const type = (cells[col.type] || '').trim().toLowerCase();
+        const amountRaw = (cells[col.amount] || '').replace(/[^0-9.\-]/g, '');
+        const reason = (cells[col.reason] || '').trim();
+        const acc = getAcc(name);
+
+        const amount = parseFloat(amountRaw);
+        if (!type || isNaN(amount)) continue; // empty-account placeholder row → just registers the account
+
+        const entry = { id: uid(type[0] || 'x'), amount: Math.round(amount * 100) / 100, reason };
+        if (type.startsWith('in')) acc.incoming.push(entry);
+        else if (type.startsWith('out')) acc.outgoing.push(entry);
+      }
+      return Array.from(byName.values());
+    }
+
+    // ---------- Toast notifications ----------
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      let accent = 'bg-cyan-500';
+      if (type === 'success') accent = 'bg-emerald-500';
+      else if (type === 'error') accent = 'bg-rose-500';
+      else if (type === 'info') accent = 'bg-cyan-500';
+
+      toast.className = 'transform translate-x-12 opacity-0 transition-all duration-300 ease-out bg-white p-4 rounded-xl shadow-lg border border-slate-100 flex items-center space-x-3 pointer-events-auto max-w-sm';
+      toast.innerHTML = `<div class="w-1.5 h-8 ${accent} rounded-full shrink-0"></div><p class="text-xs font-bold text-slate-700 leading-tight">${escapeHtml(message)}</p>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove('translate-x-12', 'opacity-0'));
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-12');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // ---------- Keyboard: ESC closes modals ----------
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeTransactionModal(); closeEnvelopeModal(); }
+    });
+
+    // ---------- Boot ----------
+    window.addEventListener('DOMContentLoaded', () => {
+      virtualAccounts = loadState();
+      renderVirtualLedgers();
+    });
+  </script>
+
+  <!--
+    OPTIONAL — MAKE STYLING FULLY OFFLINE
+    -------------------------------------
+    The CDN <script> above needs internet on first load. To run with zero
+    network ever, download Tailwind once and place it next to this file:
+        https://cdn.tailwindcss.com  ->  tailwind.js
+    then replace the CDN <script src> with:  <script src="tailwind.js"></script>
+    All app data + logic already work completely offline regardless.
+  -->
+</body>
+</html>

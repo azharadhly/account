@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CashFlow - Personal Finance Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- GLOBAL NAVIGATION -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo and App Name -->
+        <div class="flex items-center space-x-3">
+          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 text-white shadow-md">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <span class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">CashFlow</span>
+        </div>
+
+        <!-- Desktop Navigation Tabs -->
+        <nav class="hidden md:flex space-x-1">
+          <a href="#" class="px-4 py-2 rounded-lg text-sm font-semibold text-cyan-600 bg-cyan-50 transition">Dashboard</a>
+          <a href="#" onclick="showFeatureAlert('Analytics')" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">Analytics</a>
+          <a href="#" onclick="showFeatureAlert('Settings')" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">Settings</a>
+        </nav>
+
+        <!-- Right: Profile Initials Avatar & Actions -->
+        <div class="flex items-center space-x-4">
+          <!-- Quick Status indicator -->
+          <div class="hidden sm:flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-medium text-slate-600">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Live Environment</span>
+          </div>
+
+          <!-- Avatar -->
+          <div class="relative group cursor-pointer" onclick="showFeatureAlert('User Profile')">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-sm tracking-wider shadow-sm ring-2 ring-slate-100 hover:ring-cyan-300 transition-all duration-200">
+              AS
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NOTIFICATION CONTAINER (Custom Alternative to window.alert) -->
+  <div id="toast-container" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      
+      <!-- ========================================== -->
+      <!-- 1. LEFT SIDE: REAL BANK ACCOUNTS (Read-Only) -->
+      <!-- ========================================== -->
+      <section class="lg:col-span-4 space-y-6">
+        <div class="flex items-center justify-between">
+          <div class="space-y-1">
+            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+              </svg>
+              Linked Bank Accounts
+            </h2>
+            <p class="text-xs text-slate-500">Official read-only institution streams</p>
+          </div>
+          <!-- Badge -->
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            Read-Only Sync
+          </span>
+        </div>
+
+        <!-- Real Bank Accounts Vertical Stack -->
+        <div class="space-y-4">
+          
+          <!-- Card 1: Amana Bank -->
+          <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+            <div class="flex justify-between items-start">
+              <div class="flex items-center space-x-3">
+                <!-- Premium Bank Icon Placeholder -->
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg border border-emerald-100">
+                  AB
+                </div>
+                <div>
+                  <h3 class="font-bold text-slate-800">Amana Bank PLC</h3>
+                  <p class="text-xs text-slate-400 font-mono">**** 9845</p>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-600 rounded-lg">Checking</span>
+            </div>
+            
+            <div class="mt-6">
+              <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Available Balance</p>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span class="text-3xl font-extrabold text-slate-900 tracking-tight">$14,250</span>
+                <span class="text-sm font-semibold text-slate-500">.42</span>
+              </div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div class="flex items-center space-x-1.5">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span class="sync-time" data-bank="Amana">Synced 5 mins ago</span>
+              </div>
+              <button onclick="triggerSync('Amana', this)" class="p-1 hover:bg-slate-100 rounded-lg transition-colors group-hover:text-cyan-600" title="Sync now">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H18M9.67 11.16a2.4 2.4 0 001.33 3.65m4.33-3.65a2.4 2.4 0 01-1.33 3.65"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 2: Commercial Bank -->
+          <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+            <div class="flex justify-between items-start">
+              <div class="flex items-center space-x-3">
+                <!-- Premium Bank Icon Placeholder -->
+                <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-lg border border-blue-100">
+                  CB
+                </div>
+                <div>
+                  <h3 class="font-bold text-slate-800">Commercial Bank</h3>
+                  <p class="text-xs text-slate-400 font-mono">**** 1240</p>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-600 rounded-lg">Savings</span>
+            </div>
+            
+            <div class="mt-6">
+              <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Available Balance</p>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span class="text-3xl font-extrabold text-slate-900 tracking-tight">$8,910</span>
+                <span class="text-sm font-semibold text-slate-500">.80</span>
+              </div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div class="flex items-center space-x-1.5">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span class="sync-time" data-bank="Commercial">Synced 10 mins ago</span>
+              </div>
+              <button onclick="triggerSync('Commercial', this)" class="p-1 hover:bg-slate-100 rounded-lg transition-colors group-hover:text-cyan-600" title="Sync now">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H18M9.67 11.16a2.4 2.4 0 001.33 3.65m4.33-3.65a2.4 2.4 0 01-1.33 3.65"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Read-Only Banner Notice -->
+          <div class="bg-slate-100 rounded-2xl p-4 border border-slate-200/50 flex items-start gap-3">
+            <svg class="w-5 h-5 text-slate-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              These institutions sync directly via secure, read-only API connectors. Manual edits to these balances or transaction streams are strictly disabled to preserve absolute accounting compliance with your real banks.
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- 2. RIGHT SIDE: VIRTUAL LEDGER ACCOUNTS -->
+      <!-- ========================================== -->
+      <section class="lg:col-span-8 space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <svg class="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+              </svg>
+              Virtual Budget Envelopes & Ledgers
+            </h2>
+            <p class="text-xs text-slate-500">Track custom split ledgers and allocations with manual overrides</p>
+          </div>
+          <!-- Create Virtual Account Action -->
+          <button onclick="openCreateEnvelopeModal()" class="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-700 hover:to-cyan-600 text-white text-xs font-bold rounded-xl shadow-sm transition-all transform hover:-translate-y-0.5">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+            </svg>
+            New Budget Envelope
+          </button>
+        </div>
+
+        <!-- Envelope Cards Grid -->
+        <div id="virtual-ledger-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <!-- Dynamic Content generated by JavaScript -->
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODAL: ADD TRANSACTION (INCOMING / OUTGOING) -->
+  <!-- ========================================== -->
+  <div id="transaction-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 transform scale-95 transition-transform duration-200" id="transaction-modal-content">
+      <!-- Header with dynamic colored banner based on transaction type -->
+      <div id="modal-banner" class="px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r">
+        <div>
+          <h3 id="modal-title" class="text-lg font-extrabold tracking-tight">Add Transaction</h3>
+          <p id="modal-subtitle" class="text-xs opacity-90 font-medium">Sachi Acc Envelope</p>
+        </div>
+        <button onclick="closeTransactionModal()" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Form Inputs -->
+      <form id="transaction-form" onsubmit="handleTransactionSubmit(event)" class="p-6 space-y-4">
+        <input type="hidden" id="modal-env-id" value="">
+        <input type="hidden" id="modal-trans-type" value="">
+
+        <!-- Value input -->
+        <div class="space-y-1.5">
+          <label for="modal-amount" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Amount ($)</label>
+          <div class="relative">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">$</span>
+            <input 
+              type="number" 
+              step="0.01" 
+              min="0.01" 
+              id="modal-amount" 
+              required 
+              placeholder="0.00" 
+              class="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-semibold text-slate-800 transition"
+            >
+          </div>
+        </div>
+
+        <!-- Description/Reason -->
+        <div class="space-y-1.5">
+          <label id="reason-label" for="modal-reason" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Reason</label>
+          <input 
+            type="text" 
+            id="modal-reason" 
+            required 
+            placeholder="e.g. bike repair, petrol, splitting cost" 
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-700 transition"
+          >
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-3 pt-2">
+          <button 
+            type="button" 
+            onclick="closeTransactionModal()" 
+            class="flex-1 px-4 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            id="modal-submit-btn" 
+            class="flex-1 px-4 py-3 text-sm font-bold text-white rounded-xl shadow-md transition-all transform hover:-translate-y-0.5"
+          >
+            Save Entry
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CREATE NEW BUDGET ENVELOPE (NEW ACC) -->
+  <!-- ========================================== -->
+  <div id="envelope-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 transform scale-95 transition-transform duration-200" id="envelope-modal-content">
+      <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-5 text-white flex justify-between items-center">
+        <div>
+          <h3 class="text-lg font-extrabold tracking-tight">Create Budget Envelope</h3>
+          <p class="text-xs opacity-90 font-medium">Add a virtual ledger to manage split costs</p>
+        </div>
+        <button onclick="closeEnvelopeModal()" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="envelope-form" onsubmit="handleEnvelopeSubmit(event)" class="p-6 space-y-4">
+        <div class="space-y-1.5">
+          <label for="envelope-nickname" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Account Nickname</label>
+          <input 
+            type="text" 
+            id="envelope-nickname" 
+            required 
+            placeholder="e.g. Home Acc, Party Ledger, My Shares" 
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-slate-700 transition"
+          >
+        </div>
+
+        <div class="bg-cyan-50 border border-cyan-100 rounded-xl p-4">
+          <p class="text-xs text-cyan-800 leading-relaxed">
+            <strong>Budget envelopes</strong> start with a <strong>$0.00</strong> net balance. You can allocate funding using the manual incoming button (<span>+</span>) or document deductions using the outgoing button (<span>-</span>).
+          </p>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button 
+            type="button" 
+            onclick="closeEnvelopeModal()" 
+            class="flex-1 px-4 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            class="flex-1 px-4 py-3 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl shadow-md transition-all"
+          >
+            Create Envelope
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer Info -->
+  <footer class="bg-white border-t border-slate-200 mt-16 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>&copy; 2026 CashFlow Personal Finance. Built with strict client-side sandboxed ledger allocations.</p>
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT STATE & LOGIC -->
+  <script>
+    // Initial Budget Envelopes Setup State (Fully Editable and Independent)
+    let virtualAccounts = [
+      {
+        id: 'v-1',
+        nickname: 'Sachi Acc',
+        incoming: [
+          { id: 'i-1', amount: 2450.00, reason: 'Split Allocation' },
+          { id: 'i-2', amount: 550.00, reason: 'Freelance Payout' }
+        ],
+        outgoing: [
+          { id: 'o-1', amount: 120.00, reason: 'bike repair' },
+          { id: 'o-2', amount: 350.00, reason: 'asmil sacha' },
+          { id: 'o-3', amount: 80.00, reason: 'petrol' }
+        ]
+      },
+      {
+        id: 'v-2',
+        nickname: 'Abi Acc',
+        incoming: [
+          { id: 'i-3', amount: 1500.00, reason: 'Envelope Funding' }
+        ],
+        outgoing: [
+          { id: 'o-4', amount: 65.00, reason: 'Grocery store' },
+          { id: 'o-5', amount: 450.00, reason: 'Rent split' }
+        ]
+      }
+    ];
+
+    // Initialize/Render virtual ledger list
+    function renderVirtualLedgers() {
+      const grid = document.getElementById('virtual-ledger-grid');
+      grid.innerHTML = '';
+
+      if (virtualAccounts.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-1 xl:col-span-2 bg-white rounded-3xl p-8 text-center border-2 border-dashed border-slate-200">
+            <p class="text-slate-500 font-medium">No active virtual budget envelopes found.</p>
+            <p class="text-xs text-slate-400 mt-1">Create a new envelope above to start tracking split ledgers!</p>
+          </div>
+        `;
+        return;
+      }
+
+      virtualAccounts.forEach(env => {
+        // Calculations
+        const totalIncoming = env.incoming.reduce((sum, item) => sum + item.amount, 0);
+        const totalOutgoing = env.outgoing.reduce((sum, item) => sum + item.amount, 0);
+        const netBalance = totalIncoming - totalOutgoing;
+
+        // Render HTML for each budget envelope
+        const cardHTML = `
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-all duration-300">
+            <!-- Header: Bright cyan accent banner displaying Nickname -->
+            <div class="bg-gradient-to-r from-cyan-400 to-cyan-500 px-6 py-4 flex items-center justify-between shadow-sm">
+              <div class="flex items-center space-x-2">
+                <span class="p-1 bg-white/20 rounded-lg text-white">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                </span>
+                <h3 class="font-bold text-white text-base tracking-tight">${env.nickname}</h3>
+              </div>
+              <button onclick="deleteEnvelope('${env.id}')" class="text-cyan-100 hover:text-white p-1 rounded-lg transition" title="Delete Ledger Envelope">
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Content Area: Split Columns side-by-side with individual scroll limits -->
+            <div class="grid grid-cols-2 border-b border-slate-100 min-h-[180px] max-h-[240px] overflow-y-auto">
+              <!-- Left Column: Manual Incoming (Light Green background tint) -->
+              <div class="bg-emerald-50/30 p-4 border-r border-slate-100 flex flex-col justify-between">
+                <div>
+                  <h4 class="text-[10px] font-extrabold text-emerald-800 tracking-wider uppercase mb-3 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Incoming (Adds)
+                  </h4>
+                  <ul class="space-y-2">
+                    ${env.incoming.map(inc => `
+                      <li class="flex items-start justify-between text-xs py-1 hover:bg-emerald-50 rounded px-1 transition group relative">
+                        <div class="space-y-0.5">
+                          <p class="font-bold text-slate-800 flex items-center gap-1">
+                            <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                            </svg>
+                            $${inc.amount.toFixed(2)}
+                          </p>
+                          <p class="text-[10px] text-slate-400 break-words max-w-[100px]" title="${inc.reason}">${inc.reason}</p>
+                        </div>
+                        <button onclick="removeTransaction('${env.id}', 'incoming', '${inc.id}')" class="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute -right-0.5 top-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                      </li>
+                    `).join('')}
+                    ${env.incoming.length === 0 ? '<li class="text-[10px] text-slate-400 italic text-center py-4">No allocations</li>' : ''}
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Right Column: Manual Outgoing (Light Red/Pink background tint) -->
+              <div class="bg-rose-50/20 p-4 flex flex-col justify-between">
+                <div>
+                  <h4 class="text-[10px] font-extrabold text-rose-800 tracking-wider uppercase mb-3 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                    Outgoing & Reasons
+                  </h4>
+                  <ul class="space-y-2">
+                    ${env.outgoing.map(out => `
+                      <li class="flex items-start justify-between text-xs py-1 hover:bg-rose-50 rounded px-1 transition group relative">
+                        <div class="space-y-0.5">
+                          <p class="font-bold text-slate-800 flex items-center gap-1">
+                            <svg class="w-3 h-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                            $${out.amount.toFixed(2)}
+                          </p>
+                          <p class="text-[10px] text-slate-500 break-words max-w-[100px]" title="${out.reason}">${out.reason}</p>
+                        </div>
+                        <button onclick="removeTransaction('${env.id}', 'outgoing', '${out.id}')" class="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute -right-0.5 top-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                      </li>
+                    `).join('')}
+                    ${env.outgoing.length === 0 ? '<li class="text-[10px] text-slate-400 italic text-center py-4">No expenses</li>' : ''}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Interactive Zone Actions: Floating-style entry buttons near the pillars -->
+            <div class="flex justify-center -mt-4 mb-2 z-10">
+              <div class="flex items-center gap-2.5 bg-white p-1 rounded-full shadow-md border border-slate-100">
+                <button 
+                  onclick="openTransactionModal('${env.id}', 'incoming')" 
+                  class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition shadow-sm"
+                  title="Add Incoming Money"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path>
+                  </svg>
+                </button>
+                <span class="h-4 w-px bg-slate-200"></span>
+                <button 
+                  onclick="openTransactionModal('${env.id}', 'outgoing')" 
+                  class="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 transition shadow-sm"
+                  title="Deduct Outgoing / Expense"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Summary Footer Block -->
+            <div class="bg-slate-50 px-5 py-4 border-t border-slate-100 rounded-b-3xl">
+              <div class="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500 mb-2">
+                <div>
+                  <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Incoming</span>
+                  <span class="text-emerald-700 font-bold text-sm">$${totalIncoming.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div class="text-right">
+                  <span class="block text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Outgoing</span>
+                  <span class="text-rose-700 font-bold text-sm">$${totalOutgoing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-slate-200/80 flex items-center justify-between">
+                <span class="text-[10px] uppercase text-slate-500 font-extrabold tracking-wider">Net Virtual Balance</span>
+                <div class="bg-blue-50 border border-blue-100 px-3 py-1 rounded-xl">
+                  <span class="text-sm font-black text-blue-700">$${netBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        `;
+        grid.innerHTML += cardHTML;
+      });
+    }
+
+    // Modal Control & Submissions
+    function openTransactionModal(envelopeId, type) {
+      const modal = document.getElementById('transaction-modal');
+      const content = document.getElementById('transaction-modal-content');
+      const env = virtualAccounts.find(v => v.id === envelopeId);
+      
+      if (!env) return;
+
+      document.getElementById('modal-env-id').value = envelopeId;
+      document.getElementById('modal-trans-type').value = type;
+      document.getElementById('modal-subtitle').innerText = `${env.nickname} Budget Envelope`;
+      
+      // Reset form fields
+      document.getElementById('modal-amount').value = '';
+      document.getElementById('modal-reason').value = '';
+
+      const banner = document.getElementById('modal-banner');
+      const submitBtn = document.getElementById('modal-submit-btn');
+      const reasonLabel = document.getElementById('reason-label');
+      const title = document.getElementById('modal-title');
+
+      if (type === 'incoming') {
+        title.innerText = 'Add Incoming Funds';
+        reasonLabel.innerText = 'Source / Reason';
+        banner.className = "px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r from-emerald-500 to-teal-500";
+        submitBtn.className = "flex-1 px-4 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all";
+      } else {
+        title.innerText = 'Deduct Expense';
+        reasonLabel.innerText = 'Expenditure / Reason';
+        banner.className = "px-6 py-5 text-white flex justify-between items-center bg-gradient-to-r from-rose-500 to-pink-500";
+        submitBtn.className = "flex-1 px-4 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition-all";
+      }
+
+      // Show Modal
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+      }, 50);
+    }
+
+    function closeTransactionModal() {
+      const modal = document.getElementById('transaction-modal');
+      const content = document.getElementById('transaction-modal-content');
+      modal.classList.add('opacity-0');
+      content.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    function handleTransactionSubmit(event) {
+      event.preventDefault();
+      
+      const envId = document.getElementById('modal-env-id').value;
+      const type = document.getElementById('modal-trans-type').value;
+      const amount = parseFloat(document.getElementById('modal-amount').value);
+      const reason = document.getElementById('modal-reason').value.trim();
+
+      if (isNaN(amount) || amount <= 0 || !reason) {
+        showToast('Please insert a valid amount and description', 'error');
+        return;
+      }
+
+      const envIndex = virtualAccounts.findIndex(v => v.id === envId);
+      if (envIndex !== -1) {
+        const item = {
+          id: `${type[0]}-${Date.now()}`,
+          amount: amount,
+          reason: reason
+        };
+
+        if (type === 'incoming') {
+          virtualAccounts[envIndex].incoming.push(item);
+          showToast(`Allocated +$${amount.toFixed(2)} to ${virtualAccounts[envIndex].nickname}`, 'success');
+        } else {
+          virtualAccounts[envIndex].outgoing.push(item);
+          showToast(`Deducted -$${amount.toFixed(2)} from ${virtualAccounts[envIndex].nickname}`, 'info');
+        }
+
+        renderVirtualLedgers();
+        closeTransactionModal();
+      }
+    }
+
+    // Create New Envelope Actions
+    function openCreateEnvelopeModal() {
+      const modal = document.getElementById('envelope-modal');
+      const content = document.getElementById('envelope-modal-content');
+      document.getElementById('envelope-nickname').value = '';
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+      }, 50);
+    }
+
+    function closeEnvelopeModal() {
+      const modal = document.getElementById('envelope-modal');
+      const content = document.getElementById('envelope-modal-content');
+      modal.classList.add('opacity-0');
+      content.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    function handleEnvelopeSubmit(event) {
+      event.preventDefault();
+      const nickname = document.getElementById('envelope-nickname').value.trim();
+
+      if (!nickname) {
+        showToast('Nickname cannot be empty', 'error');
+        return;
+      }
+
+      const newEnvelope = {
+        id: `v-${Date.now()}`,
+        nickname: nickname,
+        incoming: [],
+        outgoing: []
+      };
+
+      virtualAccounts.push(newEnvelope);
+      renderVirtualLedgers();
+      closeEnvelopeModal();
+      showToast(`Created "${nickname}" envelope successfully`, 'success');
+    }
+
+    function deleteEnvelope(envId) {
+      const env = virtualAccounts.find(v => v.id === envId);
+      if (!env) return;
+
+      const confirmDelete = confirm(`Are you sure you want to permanently delete the budget envelope "${env.nickname}"? All manual transactions listed under it will be lost.`);
+      if (confirmDelete) {
+        virtualAccounts = virtualAccounts.filter(v => v.id !== envId);
+        renderVirtualLedgers();
+        showToast(`Envelope deleted`, 'info');
+      }
+    }
+
+    // Remove single manual record
+    function removeTransaction(envId, type, transId) {
+      const envIndex = virtualAccounts.findIndex(v => v.id === envId);
+      if (envIndex !== -1) {
+        if (type === 'incoming') {
+          virtualAccounts[envIndex].incoming = virtualAccounts[envIndex].incoming.filter(t => t.id !== transId);
+        } else {
+          virtualAccounts[envIndex].outgoing = virtualAccounts[envIndex].outgoing.filter(t => t.id !== transId);
+        }
+        renderVirtualLedgers();
+        showToast('Ledger entry removed', 'info');
+      }
+    }
+
+    // Sync button animation/mock behavior for real accounts
+    function triggerSync(bankName, btnElement) {
+      // Rotate the icon
+      const svg = btnElement.querySelector('svg');
+      svg.classList.add('animate-spin');
+      btnElement.disabled = true;
+
+      showToast(`Contacting secure gateway for ${bankName}...`, 'info');
+
+      // Emulate sync latency
+      setTimeout(() => {
+        svg.classList.remove('animate-spin');
+        btnElement.disabled = false;
+        
+        // Update Timestamp Text
+        const timestampElement = document.querySelector(`span[data-bank="${bankName}"]`);
+        if (timestampElement) {
+          timestampElement.textContent = "Synced just now";
+        }
+        showToast(`${bankName} account balances refreshed!`, 'success');
+      }, 1500);
+    }
+
+    // Notification helper
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let borderLeftColor = 'bg-cyan-500';
+      if (type === 'success') borderLeftColor = 'bg-emerald-500';
+      if (type === 'error') borderLeftColor = 'bg-rose-500';
+      if (type === 'info') borderLeftColor = 'bg-cyan-500';
+
+      toast.className = `transform translate-x-12 opacity-0 transition-all duration-300 ease-out bg-white p-4 rounded-xl shadow-lg border border-slate-100 flex items-center space-x-3 pointer-events-auto max-w-sm`;
+      toast.innerHTML = `
+        <div class="w-1.5 h-8 ${borderLeftColor} rounded-full shrink-0"></div>
+        <p class="text-xs font-bold text-slate-700 leading-tight">${message}</p>
+      `;
+
+      container.appendChild(toast);
+      
+      // Animate entry
+      setTimeout(() => {
+        toast.classList.remove('translate-x-12', 'opacity-0');
+      }, 50);
+
+      // Animate exit
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-12');
+        setTimeout(() => {
+          toast.remove();
+        }, 300);
+      }, 4000);
+    }
+
+    // Mock navigation alerting
+    function showFeatureAlert(feature) {
+      showToast(`"${feature}" is loaded. Connect additional resources under active development.`, 'info');
+    }
+
+    // Initial render
+    window.onload = function() {
+      renderVirtualLedgers();
+    };
+  </script>
+</body>
+</html>
