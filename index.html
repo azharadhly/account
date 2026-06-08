@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Accounts — Offline Virtual Accounts</title>
 
+  <!-- Inline SVG favicon (data URI keeps the app fully self-contained / offline) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230891b2'/%3E%3Cpath d='M9 7h11a3 3 0 0 1 3 3v15H12a3 3 0 0 1-3-3V7z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M13 12h7M13 16h7M13 20h4' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+
   <!--
     OFFLINE-FIRST STANDALONE APP
     ----------------------------
@@ -384,9 +387,14 @@
                 </span>
                 <h3 class="font-bold text-white text-base tracking-tight">${escapeHtml(env.nickname)}</h3>
               </div>
-              <button onclick="deleteEnvelope('${env.id}')" class="text-cyan-100 hover:text-white p-1 rounded-lg transition" title="Delete this ledger account">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
+              <div class="flex items-center gap-1">
+                <button onclick="downloadLedgerPdf('${env.id}')" class="text-cyan-100 hover:text-white p-1 rounded-lg transition" title="Download this ledger as PDF">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 7H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </button>
+                <button onclick="deleteEnvelope('${env.id}')" class="text-cyan-100 hover:text-white p-1 rounded-lg transition" title="Delete this ledger account">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
             </div>
 
             <!-- Split columns: left=Incoming (green tint), right=Outgoing (red tint) -->
@@ -889,6 +897,97 @@
         else if (type.startsWith('out')) acc.outgoing.push(entry);
       }
       return Array.from(byName.values());
+    }
+
+    // ---------- Per-ledger PDF download ----------
+    // Builds a clean, printable document for a single account in a new window
+    // and opens the browser's print dialog (choose "Save as PDF"). No library,
+    // so it works fully offline.
+    function downloadLedgerPdf(envId) {
+      const env = virtualAccounts.find(v => v.id === envId);
+      if (!env) return;
+
+      const totalIncoming = env.incoming.reduce((s, i) => s + Number(i.amount || 0), 0);
+      const totalOutgoing = env.outgoing.reduce((s, o) => s + Number(o.amount || 0), 0);
+      const netBalance = totalIncoming - totalOutgoing;
+
+      const rowsHtml = (arr, type) => arr.length
+        ? arr.map(t => `
+            <tr>
+              <td class="reason">${escapeHtml(t.reason)}</td>
+              <td class="amount ${type}">${type === 'incoming' ? '+' : '−'} LKR ${money(t.amount)}</td>
+            </tr>`).join('')
+        : `<tr><td colspan="2" class="empty">No ${type === 'incoming' ? 'allocations' : 'expenses'}</td></tr>`;
+
+      const doc = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(env.nickname)} — Ledger</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; margin: 32px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: #64748b; font-size: 12px; margin: 0 0 20px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; margin: 22px 0 8px; }
+  h2.in { color: #047857; }
+  h2.out { color: #be123c; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #e2e8f0; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; }
+  td.amount { text-align: right; font-weight: 700; white-space: nowrap; }
+  td.amount.incoming { color: #047857; }
+  td.amount.outgoing { color: #be123c; }
+  td.empty { color: #94a3b8; font-style: italic; text-align: center; }
+  .totals { margin-top: 28px; border-top: 2px solid #cbd5e1; padding-top: 14px; }
+  .totals div { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .totals .net { font-size: 16px; font-weight: 800; border-top: 1px solid #e2e8f0; margin-top: 6px; padding-top: 10px; }
+  .net .pos { color: #1d4ed8; }
+  .net .neg { color: #be123c; }
+  .foot { margin-top: 36px; font-size: 10px; color: #94a3b8; text-align: center; }
+  @media print { body { margin: 0; padding: 24px; } }
+</style>
+</head>
+<body>
+  <h1>${escapeHtml(env.nickname)}</h1>
+  <p class="sub">Virtual Ledger Account · Generated ${escapeHtml(dateStamp())}</p>
+
+  <h2 class="in">Incoming</h2>
+  <table>
+    <thead><tr><th>Source / Reason</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>${rowsHtml(env.incoming, 'incoming')}</tbody>
+  </table>
+
+  <h2 class="out">Outgoing &amp; Reasons</h2>
+  <table>
+    <thead><tr><th>Expenditure / Reason</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>${rowsHtml(env.outgoing, 'outgoing')}</tbody>
+  </table>
+
+  <div class="totals">
+    <div><span>Total Incoming</span><span style="color:#047857;font-weight:700">LKR ${money(totalIncoming)}</span></div>
+    <div><span>Total Outgoing</span><span style="color:#be123c;font-weight:700">LKR ${money(totalOutgoing)}</span></div>
+    <div class="net"><span>Net Balance</span><span class="${netBalance >= 0 ? 'pos' : 'neg'}">LKR ${money(netBalance)}</span></div>
+  </div>
+
+  <p class="foot">Accounts · Offline ledger · Your data never leaves this device.</p>
+</body>
+</html>`;
+
+      const win = window.open('', '_blank');
+      if (!win) {
+        showToast('Allow pop-ups to download the PDF', 'error');
+        return;
+      }
+      win.document.open();
+      win.document.write(doc);
+      win.document.close();
+      // Give the new window a tick to render before printing.
+      win.onload = () => {
+        win.focus();
+        win.print();
+      };
+      showToast(`Opening PDF for ${env.nickname} — choose "Save as PDF"`, 'success');
     }
 
     // ---------- Toast notifications ----------
